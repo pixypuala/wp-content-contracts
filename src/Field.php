@@ -24,4 +24,17 @@ final class Field {
 		public readonly FieldType $type,
 		public readonly bool $required = true,
 	) {}
+
+	/**
+	 * Structural equality: same name, type, and requiredness.
+	 *
+	 * @param Field $other Field to compare against.
+	 *
+	 * @return bool
+	 */
+	public function equals( Field $other ): bool {
+		return $this->name === $other->name
+			&& $this->type === $other->type
+			&& $this->required === $other->required;
+	}
 }

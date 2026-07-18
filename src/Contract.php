@@ -80,4 +80,31 @@ final class Contract {
 	public function is_satisfied_by( array $data ): bool {
 		return array() === $this->validate( $data );
 	}
+
+	/**
+	 * Structural equality: same name, version, and fields in the same order.
+	 *
+	 * Provides a first-class symmetry check for the JSON-Schema export/import
+	 * round trip: a contract exported and re-imported must equal the original.
+	 *
+	 * @param Contract $other Contract to compare against.
+	 *
+	 * @return bool
+	 */
+	public function equals( Contract $other ): bool {
+		if ( $this->name !== $other->name
+			|| $this->version !== $other->version
+			|| count( $this->fields ) !== count( $other->fields )
+		) {
+			return false;
+		}
+
+		foreach ( $this->fields as $index => $field ) {
+			if ( ! $field->equals( $other->fields[ $index ] ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
 }
