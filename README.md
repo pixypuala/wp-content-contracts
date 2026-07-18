@@ -4,7 +4,7 @@
 
 ```bash
 composer install
-composer test    # 8 unit tests for the contract validator
+composer test    # 16 unit tests for the contract validator and JSON-Schema export
 composer lint    # WordPress coding standards (PHPCS)
 ```
 
@@ -17,12 +17,17 @@ A reusable, framework-free library for defining and validating **versioned conte
 - `Field` / `Contract` (`src/`) — a named, versioned set of typed fields. `Contract::validate()`
   reports missing required fields, wrong types, and unexpected fields (contracts are closed, not
   just a subset), so producers and consumers can evolve independently behind the version.
+- `JsonSchemaExporter` (`src/JsonSchemaExporter.php`) — exports a `Contract` as a JSON Schema
+  (draft 2020-12) array or deterministic JSON string. Required fields map to `required`, each
+  `FieldType` maps to its JSON Schema type/format, and the object is closed
+  (`additionalProperties: false`) to mirror `Contract::validate()`.
 
 This generalises the content-contract layer proven in the Hybrid Content Delivery Platform.
 
 ## Documented boundary (not yet built)
 
-JSON-Schema export/import of contracts and a WP-CLI command to check live REST responses.
+JSON-Schema **import** of contracts and a WP-CLI command to check live REST responses.
+(JSON-Schema **export** is built — see `JsonSchemaExporter` above.)
 
 > **Document status:** implementation-complete engineering blueprint, not a claim that the software has already been built.
 
