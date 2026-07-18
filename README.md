@@ -1,5 +1,29 @@
 # WP Content Contracts
 
+## Getting started
+
+```bash
+composer install
+composer test    # 8 unit tests for the contract validator
+composer lint    # WordPress coding standards (PHPCS)
+```
+
+## What is built today
+
+A reusable, framework-free library for defining and validating **versioned content contracts**:
+
+- `FieldType` (`src/FieldType.php`) — typed primitives (string, integer, boolean, url, iso8601,
+  string[]) each with its own validation rule.
+- `Field` / `Contract` (`src/`) — a named, versioned set of typed fields. `Contract::validate()`
+  reports missing required fields, wrong types, and unexpected fields (contracts are closed, not
+  just a subset), so producers and consumers can evolve independently behind the version.
+
+This generalises the content-contract layer proven in the Hybrid Content Delivery Platform.
+
+## Documented boundary (not yet built)
+
+JSON-Schema export/import of contracts and a WP-CLI command to check live REST responses.
+
 > **Document status:** implementation-complete engineering blueprint, not a claim that the software has already been built.
 
 Versioned, testable contracts between WordPress content and external consumers without moving authorization or canonical content rules out of WordPress.
