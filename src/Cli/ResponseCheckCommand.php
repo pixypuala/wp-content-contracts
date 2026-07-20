@@ -40,18 +40,55 @@ final class ResponseCheckCommand {
 	 *
 	 * @param Contract $contract Contract the response must satisfy.
 	 * @param string   $body     Raw JSON response body.
+	 * @param string   $path     Dotted path to the described object, e.g. "data".
+	 *                           Empty checks the whole body.
 	 *
 	 * @return CheckResult Structured pass/violations outcome.
 	 *
-	 * @throws InvalidArgumentException When the body is not a JSON array/object.
+	 * @throws InvalidArgumentException When the body is not a JSON array/object,
+	 *                                  or $path does not lead to one.
 	 */
-	public function evaluate( Contract $contract, string $body ): CheckResult {
+	public function evaluate( Contract $contract, string $body, string $path = '' ): CheckResult {
 		$decoded = json_decode( $body, true );
 		if ( ! is_array( $decoded ) ) {
 			throw new InvalidArgumentException( 'Response body must be a JSON object or array.' );
 		}
 
-		return $this->checker->check( $contract, $decoded );
+		return $this->checker->check( $contract, $this->at_path( $decoded, $path ) );
+	}
+
+	/**
+	 * Narrow a decoded body to the object the contract actually describes.
+	 *
+	 * Most real APIs wrap their payload — `{ "meta": {...}, "data": {...} }` — so
+	 * checking the whole body against a resource contract would always fail on the
+	 * wrapper's own keys. A dotted path selects the described object instead.
+	 *
+	 * @param array<string, mixed> $decoded Decoded response body.
+	 * @param string               $path    Dotted path, e.g. "data" or "data.0". Empty means the whole body.
+	 *
+	 * @return array<string, mixed> The selected object.
+	 *
+	 * @throws InvalidArgumentException When the path does not lead to an object.
+	 */
+	private function at_path( array $decoded, string $path ): array {
+		if ( '' === $path ) {
+			return $decoded;
+		}
+
+		$current = $decoded;
+		foreach ( explode( '.', $path ) as $segment ) {
+			if ( ! is_array( $current ) || ! array_key_exists( $segment, $current ) ) {
+				throw new InvalidArgumentException( sprintf( 'Path "%s" is not present in the response.', $path ) );
+			}
+			$current = $current[ $segment ];
+		}
+
+		if ( ! is_array( $current ) ) {
+			throw new InvalidArgumentException( sprintf( 'Path "%s" is not an object or array.', $path ) );
+		}
+
+		return $current;
 	}
 
 	/**
@@ -87,20 +124,37 @@ if ( class_exists( '\WP_CLI' ) ) {
 		 * Fetch a live REST URL and check its body against a contract schema.
 		 *
 		 * @param string[]              $args       Positional args: <schema-file> <url>.
-		 * @param array<string, string> $assoc_args Reserved for future options.
+		 * @param array<string, string> $assoc_args Options; supports --json-path.
 		 *
 		 * @return void
 		 */
 		static function ( array $args, array $assoc_args ): void {
-			unset( $assoc_args );
+			// Named `json-path`, not `path`: WP-CLI reserves `--path` globally for
+			// the WordPress install directory, and a collision silently retargets
+			// the whole command at a directory that does not exist.
+			$path = (string) ( $assoc_args['json-path'] ?? '' );
 
 			[ $schema_file, $url ] = array( $args[0] ?? '', $args[1] ?? '' );
 			if ( '' === $schema_file || '' === $url ) {
-				\WP_CLI::error( 'Usage: wp content-contracts check-response <schema-file> <url>' );
+				\WP_CLI::error( 'Usage: wp content-contracts check-response <schema-file> <url> [--json-path=<dotted.path>]' );
 			}
 
-			$schema_json = (string) file_get_contents( $schema_file );
-			$contract    = ( new \Pixypuala\ContentContracts\JsonSchemaImporter() )->from_json( $schema_json );
+			if ( ! is_readable( $schema_file ) ) {
+				\WP_CLI::error( sprintf( 'Cannot read schema file: %s', $schema_file ) );
+			}
+
+			$schema_json = (string) file_get_contents( $schema_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local file read in a CLI context.
+
+			/*
+			 * The importer rejects a schema that is not a content contract by
+			 * throwing. That rejection is correct, but a CLI must report it as a
+			 * usage error the operator can act on, not as an uncaught stack trace.
+			 */
+			try {
+				$contract = ( new \Pixypuala\ContentContracts\JsonSchemaImporter() )->from_json( $schema_json );
+			} catch ( \InvalidArgumentException | \JsonException $error ) {
+				\WP_CLI::error( sprintf( 'Invalid contract schema in %s: %s', $schema_file, $error->getMessage() ) );
+			}
 
 			$response = wp_remote_get( $url );
 			if ( is_wp_error( $response ) ) {
@@ -108,7 +162,14 @@ if ( class_exists( '\WP_CLI' ) ) {
 			}
 
 			$command = new ResponseCheckCommand();
-			$result  = $command->evaluate( $contract, (string) wp_remote_retrieve_body( $response ) );
+
+			// A URL that answers with HTML rather than JSON is an operator
+			// mistake, and must read as one instead of a stack trace.
+			try {
+				$result = $command->evaluate( $contract, (string) wp_remote_retrieve_body( $response ), $path );
+			} catch ( \InvalidArgumentException $error ) {
+				\WP_CLI::error( sprintf( 'Cannot check %s: %s', $url, $error->getMessage() ) );
+			}
 
 			foreach ( $command->report_lines( $result ) as $line ) {
 				\WP_CLI::log( $line );

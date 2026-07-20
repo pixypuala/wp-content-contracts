@@ -57,6 +57,63 @@ final class ResponseCheckCommandTest extends TestCase {
 		( new ResponseCheckCommand() )->evaluate( $this->articleContract(), 'not json' );
 	}
 
+	/**
+	 * An enveloped API — the common real shape — is checked at the wrapped object.
+	 */
+	public function test_evaluate_checks_the_object_at_a_path(): void {
+		$body = (string) json_encode(
+			array(
+				'meta' => array( 'contractVersion' => 1 ),
+				'data' => array(
+					'id'    => 1,
+					'title' => 'Hi',
+				),
+			)
+		);
+
+		$this->assertFalse(
+			( new ResponseCheckCommand() )->evaluate( $this->articleContract(), $body )->passed,
+			'The envelope itself does not satisfy a resource contract.'
+		);
+		$this->assertTrue(
+			( new ResponseCheckCommand() )->evaluate( $this->articleContract(), $body, 'data' )->passed
+		);
+	}
+
+	/**
+	 * A path may index into a list, so collection endpoints are checkable too.
+	 */
+	public function test_evaluate_follows_a_nested_path_into_a_list(): void {
+		$body = (string) json_encode(
+			array(
+				'data' => array(
+					array(
+						'id'    => 7,
+						'title' => 'First',
+					),
+				),
+			)
+		);
+
+		$result = ( new ResponseCheckCommand() )->evaluate( $this->articleContract(), $body, 'data.0' );
+
+		$this->assertTrue( $result->passed );
+	}
+
+	public function test_evaluate_rejects_a_path_that_is_not_present(): void {
+		$body = (string) json_encode( array( 'data' => array( 'id' => 1 ) ) );
+
+		$this->expectException( InvalidArgumentException::class );
+		( new ResponseCheckCommand() )->evaluate( $this->articleContract(), $body, 'payload.article' );
+	}
+
+	public function test_evaluate_rejects_a_path_that_is_not_an_object(): void {
+		$body = (string) json_encode( array( 'data' => 'a string' ) );
+
+		$this->expectException( InvalidArgumentException::class );
+		( new ResponseCheckCommand() )->evaluate( $this->articleContract(), $body, 'data' );
+	}
+
 	public function test_report_lines_render_success(): void {
 		$lines = ( new ResponseCheckCommand() )->report_lines( new CheckResult( true, array() ) );
 
