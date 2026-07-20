@@ -38,11 +38,21 @@ A reusable, framework-free library for defining and validating **versioned conte
 
 This generalises the content-contract layer proven in the Hybrid Content Delivery Platform.
 
+## Verified against a live install
+
+The WP-CLI command has been run against WordPress 7.0.2, checking a genuinely independent API —
+the delivery routes of the `hybrid-wordpress-content-delivery-platform` plugin — against a
+contract exported by `JsonSchemaExporter`. It reports conformance and exits 0 for the resource,
+and reports ten violations and exits 1 when pointed at the envelope instead. That run also found
+three real defects, since fixed: an unreadable or non-contract schema crashed rather than
+reporting, a URL answering with HTML did the same, and enveloped responses could not be checked
+at all. Command output and details are in
+[`docs/RUNTIME-VERIFICATION.md`](docs/RUNTIME-VERIFICATION.md).
+
 ## Documented boundary (not yet built)
 
-Fetching a live REST response against a running site is the only remaining environment-dependent
-step: it needs an installed, running WordPress and is exercised through the WP-CLI command above.
-The JSON-Schema export/import round trip and the response checker itself are built and unit tested.
+Authenticated APIs. Every check is currently an unauthenticated `wp_remote_get`, so a contract
+for an endpoint behind credentials cannot be checked until the command can pass them through.
 
 > **Document status:** implementation-complete engineering blueprint, not a claim that the software has already been built.
 
